@@ -354,6 +354,11 @@
       meetingInfo: "Tuesdays · 11:59 pm · Stevenson Center 0000",
     contactEmail: "contact@vanderbilt.edu",
 
+    // How many minutes after a talk's start time it should still be shown
+    // as "Ongoing" at the top of the page (instead of moving to Past
+    // talks). Set to 0 to disable and move talks to Past immediately.
+    ongoingMinutes: 60,
+
     // Paste your Google Sheet's "Publish to web → CSV" link here:
     sheetCsvUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3T1u2a2WGMMM7u7Cl88oWipqd2cnuk20dDrL45V-uU15ULvc9QxpKN3st4QDDUfCmxonxxG_0XxQh/pub?gid=0&single=true&output=csv"
   };
@@ -488,9 +493,9 @@
     return frag;
   }
 
-  function buildHero(talk){
+  function buildHero(talk, isOngoing){
     const section = el('section', 'next-talk');
-    section.appendChild(el('p', 'eyebrow', 'Next up'));
+    section.appendChild(el('p', 'eyebrow', isOngoing ? 'Ongoing' : 'Next up'));
     const card = el('div', 'next-talk-card');
 
     if (talk.date){
@@ -640,26 +645,43 @@
   function render(talks){
     app.innerHTML = '';
     const now = new Date();
+    const ongoingMs = Math.max(0, Number(CONFIG.ongoingMinutes) || 0) * 60000;
 
     const withDate = talks.filter(t => t.date);
     const withoutDate = talks.filter(t => !t.date);
     withDate.sort((a, b) => a.date - b.date);
 
-    const upcoming = withDate.filter(t => t.date >= now).concat(withoutDate);
-    const past = withDate.filter(t => t.date < now).slice().reverse();
+    const isOngoing = t => now >= t.date && now.getTime() < t.date.getTime() + ongoingMs;
+    const isPast = t => now.getTime() >= t.date.getTime() + ongoingMs;
 
-    if (upcoming.length === 0 && past.length === 0){
+    // A talk stays pinned as the hero, labeled "Ongoing", from its start
+    // time until ongoingMs later, instead of immediately dropping into
+    // Past talks the moment it starts. If (unusually) more than one talk
+    // is "ongoing" at once, the most recently-started one wins the hero
+    // spot; withDate is sorted ascending, so that's the last match.
+    const ongoingTalks = withDate.filter(isOngoing);
+    const heroTalk = ongoingTalks.length > 0
+      ? ongoingTalks[ongoingTalks.length - 1]
+      : (withDate.find(t => t.date > now) || withoutDate[0]);
+    const heroIsOngoing = !!heroTalk && ongoingTalks.includes(heroTalk);
+
+    const upcoming = withDate
+      .filter(t => t !== heroTalk && !isPast(t))
+      .concat(withoutDate.filter(t => t !== heroTalk));
+    const past = withDate.filter(isPast).slice().reverse();
+
+    if (!heroTalk && past.length === 0){
       showEmptyTalks();
       return;
     }
 
-    if (upcoming.length > 0){
-      app.appendChild(buildHero(upcoming[0]));
-      if (upcoming.length > 1){
-        app.appendChild(buildTimeline('Upcoming talks', upcoming.slice(1), 'asc'));
-      }
+    if (heroTalk){
+      app.appendChild(buildHero(heroTalk, heroIsOngoing));
     } else {
       app.appendChild(stateBox('No upcoming talks', [el('p', null, 'Check back soon \u2014 the next talk will appear here.')]));
+    }
+    if (upcoming.length > 0){
+      app.appendChild(buildTimeline('Upcoming talks', upcoming, 'asc'));
     }
 
     if (past.length > 0){
