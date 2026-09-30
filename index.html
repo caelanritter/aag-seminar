@@ -53,6 +53,11 @@
     --font-display: "STIX Two Text", "Times New Roman", serif;
     --font-body: "STIX Two Text", "Times New Roman", serif;
     --font-mono: "IBM Plex Mono", monospace;
+
+    /* Abstract paragraph layout — adjust these two to taste.
+       Set either one to 0 to turn it off. */
+    --abstract-para-gap: 0.5em;   /* extra space between paragraphs */
+    --abstract-indent: 1.5em;     /* first-line indent, paragraphs 2+ */
   }
 
   /* --- Dark mode ---
@@ -270,6 +275,13 @@
     white-space: pre-line;
     margin: 0 0 12px;
   }
+  .talk-abstract p{ margin: 0; }
+  .talk-abstract p + p{
+    margin-top: var(--abstract-para-gap);
+    text-indent: var(--abstract-indent);
+  }
+  /* keep centered display math from being nudged by the indent */
+  .talk-abstract .katex-display{ text-indent: 0; }
 
   /* ---------- Timeline ---------- */
   .timeline-list{
@@ -416,7 +428,7 @@
   const CONFIG = {
     seminarName: "Vanderbilt Algebra and Algebraic Geometry Seminar",
     tagline: "",
-      meetingInfo: "Tuesdays · 11 am · Stevenson Center TBD",
+    meetingInfo: "Tuesdays · 11 am · Stevenson Center TBD",
     contactEmail: "caelan.ritter@vanderbilt.edu",
 
     // How many minutes after a talk's start time it should still be shown
@@ -609,7 +621,17 @@
     const meta = talkMetaLine(talk, omitDate);
     if (meta) frag.appendChild(el('p', 'talk-meta', meta));
 
-    if (talk.abstract) frag.appendChild(el('p', 'talk-abstract', talk.abstract));
+    if (talk.abstract){
+      // A blank line in the sheet starts a new paragraph (as in LaTeX).
+      const abs = el('div', 'talk-abstract');
+      talk.abstract
+        .replace(/\r\n?/g, '\n')
+        .split(/\n[ \t]*\n+/)
+        .map(para => para.trim())
+        .filter(Boolean)
+        .forEach(para => abs.appendChild(el('p', null, para)));
+      frag.appendChild(abs);
+    }
 
     return frag;
   }
